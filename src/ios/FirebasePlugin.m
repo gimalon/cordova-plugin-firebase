@@ -18,7 +18,9 @@
 
 @synthesize notificationCallbackId;
 @synthesize tokenRefreshCallbackId;
+@synthesize registerCallbackId;
 @synthesize notificationStack;
+
 
 static NSInteger const kNotificationStackSize = 10;
 static FirebasePlugin *firebasePlugin;
@@ -52,6 +54,15 @@ static FirebasePlugin *firebasePlugin;
 }
 
 - (void)grantPermission:(CDVInvokedUrlCommand *)command {
+    if (self.registerCallbackId != nil) {
+      // registration already in process, return error       
+      CDVPluginResult *commandResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"grantPermission already in process"];
+      [self.commandDelegate sendPluginResult:commandResult callbackId:self.registerCallbackId];
+      return;
+    }
+
+    self.registerCallbackId = command.callbackId;
+
     if (floor(NSFoundationVersionNumber) <= NSFoundationVersionNumber_iOS_9_x_Max) {
         if ([[UIApplication sharedApplication]respondsToSelector:@selector(registerUserNotificationSettings:)]) {
             UIUserNotificationType notificationTypes =
@@ -84,9 +95,69 @@ static FirebasePlugin *firebasePlugin;
         [[UIApplication sharedApplication] registerForRemoteNotifications];
     }
 
-    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    //CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+    //[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
+
+
+- (void)applicationDidBecomeActive:(UIApplication *)application {
+    NSLog(@"[Push] applicationDidBecomeActive");
+   
+    if (self.registerCallbackId != nil) {
+        NSLog(@"[Push] registering checkUserNotificationSettings");
+        [self performSelector:@selector(checkUserNotificationSettings) withObject:nil afterDelay:1];
+    }
+}
+
+- (void)applicationWillResignActive:(UIApplication *)application {
+    NSLog(@"[Push] applicationWillResignActive");
+}
+
+- (void)didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+    NSLog(@"[Push] didRegisterForRemoteNotificationsWithDeviceToken");
+    if (self.registerCallbackId != nil)
+    {
+        CDVPluginResult *commandResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:[NSString stringWithFormat:@"%@", deviceToken]];
+        [self.commandDelegate sendPluginResult:commandResult callbackId:self.registerCallbackId];
+    } else {
+        NSLog(@"[Push] didRegisterForRemoteNotificationsWithDeviceToken == no callBack");
+
+    }
+    self.registerCallbackId = nil;
+}
+
+- (void)checkUserNotificationSettings {
+    NSLog(@"[Push] Check user Notification Settings");
+    if (self.registerCallbackId != nil) {
+        bool registered =[[UIApplication sharedApplication] isRegisteredForRemoteNotifications];
+        //UIRemoteNotificationType types = [[UIApplication sharedApplication] enabledRemoteNotificationTypes];
+        
+        //if (types == UIRemoteNotificationTypeNone) {
+        if (!registered) {
+            NSLog(@"[Push] User aborted push");
+
+            CDVPluginResult *commandResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"userAborted"];
+            [self.commandDelegate sendPluginResult:commandResult callbackId:self.registerCallbackId];
+            self.registerCallbackId = nil;
+        } else {
+            NSLog(@"[Push] User accepted push");
+        }
+    }
+    
+    
+}
+
+- (void)didFailToRegisterForRemoteNotificationsWithError:(NSError *)error
+{
+    if (self.registerCallbackId != nil)
+    {
+        NSString        *errorMessage = (error) ? [NSString stringWithFormat:@"%@", [error localizedDescription]] : @"Unexpected error";
+        CDVPluginResult *commandResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:errorMessage];
+        [self.commandDelegate sendPluginResult:commandResult callbackId:self.registerCallbackId];
+    }
+    self.registerCallbackId = nil;
+}
+
 
 - (void)setBadgeNumber:(CDVInvokedUrlCommand *)command {
     int number = [[command.arguments objectAtIndex:0] intValue];

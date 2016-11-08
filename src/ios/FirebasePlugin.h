@@ -18,8 +18,16 @@
 - (void)setUserId:(CDVInvokedUrlCommand*)command;
 - (void)setUserProperty:(CDVInvokedUrlCommand*)command;
 
+- (void)applicationDidBecomeActive:(UIApplication *)application;
+- (void)applicationWillResignActive:(UIApplication *)application;
+- (void)didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken;
+- (void)didFailToRegisterForRemoteNotificationsWithError:(NSError *)error;
+
+
+
 @property (nonatomic, copy) NSString *notificationCallbackId;
 @property (nonatomic, copy) NSString *tokenRefreshCallbackId;
+@property (nonatomic, copy) NSString *registerCallbackId;
 @property (nonatomic, retain) NSMutableArray *notificationStack;
 
 @end

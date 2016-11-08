@@ -40,15 +40,29 @@
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tokenRefreshNotification:)
                                                  name:kFIRInstanceIDTokenRefreshNotification object:nil];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(listener_FirebasePlugin_applicationDidBecomeActive:)
+                                                 name:UIApplicationDidBecomeActiveNotification object:nil];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(listener_FirebasePlugin_applicationWillResignActive:)
+                                                 name:UIApplicationWillResignActiveNotification object:nil];
     
     self.applicationInBackground = @(YES);
     
     return YES;
 }
 
-- (void)applicationDidBecomeActive:(UIApplication *)application {
+- (void)listener_FirebasePlugin_applicationDidBecomeActive:(UIApplication *)application {
     [self connectToFcm];
     self.applicationInBackground = @(NO);
+    
+    FirebasePlugin *pushHandler = [self.viewController getCommandInstance:@"FirebasePlugin"];
+    [pushHandler applicationDidBecomeActive:application];
+}
+
+- (void)listener_FirebasePlugin_applicationWillResignActive:(UIApplication *)application {
+    FirebasePlugin *pushHandler = [self.viewController getCommandInstance:@"FirebasePlugin"];
+    [pushHandler applicationWillResignActive:application];
 }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
@@ -126,5 +140,16 @@
     NSLog(@"%@", [remoteMessage appData]);
 }
 #endif
+
+
+- (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+    FirebasePlugin *pushHandler = [self.viewController getCommandInstance:@"FirebasePlugin"];
+    [pushHandler didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];
+}
+
+- (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+    FirebasePlugin *pushHandler = [self.viewController getCommandInstance:@"FirebasePlugin"];
+    [pushHandler didFailToRegisterForRemoteNotificationsWithError:error];
+}
 
 @end
