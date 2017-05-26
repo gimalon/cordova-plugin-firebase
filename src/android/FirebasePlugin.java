@@ -2,40 +2,35 @@ package org.apache.cordova.firebase;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.support.v4.app.NotificationManagerCompat;
 import android.util.Base64;
 import android.util.Log;
-import android.os.Bundle;
-import android.content.Context;
-import android.content.SharedPreferences;
-
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.Task;
+import com.google.firebase.analytics.FirebaseAnalytics;
+import com.google.firebase.iid.FirebaseInstanceId;
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigInfo;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigValue;
-import org.apache.cordova.CordovaPlugin;
+import com.google.firebase.crash.FirebaseCrash;
+import me.leolin.shortcutbadger.ShortcutBadger;
 import org.apache.cordova.CallbackContext;
+import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.PluginResult;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import com.google.firebase.iid.FirebaseInstanceId;
-import com.google.firebase.analytics.FirebaseAnalytics;
-import com.google.firebase.messaging.FirebaseMessaging;
-
-import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.ArrayList;
-
-import me.leolin.shortcutbadger.ShortcutBadger;
-
 
 public class FirebasePlugin extends CordovaPlugin {
 
@@ -45,16 +40,26 @@ public class FirebasePlugin extends CordovaPlugin {
 
     private static boolean inBackground = true;
     private static ArrayList<Bundle> notificationStack = null;
-    private static WeakReference<CallbackContext> notificationCallbackContext;
-    private static WeakReference<CallbackContext> tokenRefreshCallbackContext;
+    private static CallbackContext notificationCallbackContext;
+    private static CallbackContext tokenRefreshCallbackContext;
 
     @Override
     protected void pluginInitialize() {
         final Context context = this.cordova.getActivity().getApplicationContext();
+        final Bundle extras = this.cordova.getActivity().getIntent().getExtras();
         this.cordova.getThreadPool().execute(new Runnable() {
             public void run() {
                 Log.d(TAG, "Starting Firebase plugin");
                 mFirebaseAnalytics = FirebaseAnalytics.getInstance(context);
+                if (extras != null && extras.size() > 1) {
+                    if (FirebasePlugin.notificationStack == null) {
+                        FirebasePlugin.notificationStack = new ArrayList<Bundle>();
+                    }
+                    if (extras.containsKey("google.message_id")) {
+                        extras.putBoolean("tap", true);
+                        notificationStack.add(extras);
+                    }
+                }
             }
         });
     }
@@ -66,6 +71,9 @@ public class FirebasePlugin extends CordovaPlugin {
             return true;
         } else if (action.equals("getToken")) {
             this.getToken(callbackContext);
+            return true;
+        } else if (action.equals("hasPermission")) {
+            this.hasPermission(callbackContext);
             return true;
         } else if (action.equals("setBadgeNumber")) {
             this.setBadgeNumber(callbackContext, args.getInt(0));
@@ -88,8 +96,14 @@ public class FirebasePlugin extends CordovaPlugin {
         } else if (action.equals("logEvent")) {
             this.logEvent(callbackContext, args.getString(0), args.getJSONObject(1));
             return true;
+        } else if (action.equals("logError")) {
+            this.logError(callbackContext, args.getString(0));
+            return true;
+        } else if (action.equals("setScreenName")) {
+            this.setScreenName(callbackContext, args.getString(0));
+            return true;
         } else if (action.equals("setUserId")) {
-            this.setUserId (callbackContext, args.getString(0));
+            this.setUserId(callbackContext, args.getString(0));
             return true;
         } else if (action.equals("setUserProperty")) {
             this.setUserProperty(callbackContext, args.getString(0), args.getString(1));
@@ -140,7 +154,7 @@ public class FirebasePlugin extends CordovaPlugin {
     }
 
     private void onNotificationOpen(final CallbackContext callbackContext) {
-        FirebasePlugin.notificationCallbackContext = new WeakReference<CallbackContext>(callbackContext);
+        FirebasePlugin.notificationCallbackContext = callbackContext;
         if (FirebasePlugin.notificationStack != null) {
             for (Bundle bundle : FirebasePlugin.notificationStack) {
                 FirebasePlugin.sendNotification(bundle);
@@ -150,7 +164,7 @@ public class FirebasePlugin extends CordovaPlugin {
     }
 
     private void onTokenRefresh(final CallbackContext callbackContext) {
-        FirebasePlugin.tokenRefreshCallbackContext = new WeakReference<CallbackContext>(callbackContext);
+        FirebasePlugin.tokenRefreshCallbackContext = callbackContext;
 
         cordova.getThreadPool().execute(new Runnable() {
             public void run() {
@@ -168,14 +182,14 @@ public class FirebasePlugin extends CordovaPlugin {
     }
 
     public static void sendNotification(Bundle bundle) {
-        if(!FirebasePlugin.hasNotificationsCallback()) {
+        if (!FirebasePlugin.hasNotificationsCallback()) {
             if (FirebasePlugin.notificationStack == null) {
                 FirebasePlugin.notificationStack = new ArrayList<Bundle>();
             }
             notificationStack.add(bundle);
             return;
         }
-        final CallbackContext callbackContext = FirebasePlugin.notificationCallbackContext.get();
+        final CallbackContext callbackContext = FirebasePlugin.notificationCallbackContext;
         if (callbackContext != null && bundle != null) {
             JSONObject json = new JSONObject();
             Set<String> keys = bundle.keySet();
@@ -195,10 +209,10 @@ public class FirebasePlugin extends CordovaPlugin {
     }
 
     public static void sendToken(String token) {
-        if(FirebasePlugin.tokenRefreshCallbackContext == null) {
+        if (FirebasePlugin.tokenRefreshCallbackContext == null) {
             return;
         }
-        final CallbackContext callbackContext = FirebasePlugin.tokenRefreshCallbackContext.get();
+        final CallbackContext callbackContext = FirebasePlugin.tokenRefreshCallbackContext;
         if (callbackContext != null && token != null) {
             PluginResult pluginresult = new PluginResult(PluginResult.Status.OK, token);
             pluginresult.setKeepCallback(true);
@@ -211,14 +225,17 @@ public class FirebasePlugin extends CordovaPlugin {
     }
 
     public static boolean hasNotificationsCallback() {
-        return FirebasePlugin.notificationCallbackContext != null &&
-                FirebasePlugin.notificationCallbackContext.get() != null;
+        return FirebasePlugin.notificationCallbackContext != null;
     }
 
     @Override
     public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        FirebasePlugin.sendNotification(intent.getExtras());
+        final Bundle data = intent.getExtras();
+        if (data != null && data.containsKey("google.message_id")) {
+            data.putBoolean("tap", true);
+            FirebasePlugin.sendNotification(data);
+        }
     }
 
     // DEPRECTED - alias of getToken
@@ -241,6 +258,23 @@ public class FirebasePlugin extends CordovaPlugin {
                 try {
                     String token = FirebaseInstanceId.getInstance().getToken();
                     callbackContext.success(token);
+                } catch (Exception e) {
+                    callbackContext.error(e.getMessage());
+                }
+            }
+        });
+    }
+
+    private void hasPermission(final CallbackContext callbackContext) {
+        cordova.getThreadPool().execute(new Runnable() {
+            public void run() {
+                try {
+                    Context context = cordova.getActivity();
+                    NotificationManagerCompat notificationManagerCompat = NotificationManagerCompat.from(context);
+                    boolean areNotificationsEnabled = notificationManagerCompat.areNotificationsEnabled();
+                    JSONObject object = new JSONObject();
+                    object.put("isEnabled", areNotificationsEnabled);
+                    callbackContext.success(object);
                 } catch (Exception e) {
                     callbackContext.error(e.getMessage());
                 }
@@ -309,12 +343,12 @@ public class FirebasePlugin extends CordovaPlugin {
     private void logEvent(final CallbackContext callbackContext, final String name, final JSONObject params) throws JSONException {
         final Bundle bundle = new Bundle();
         Iterator iter = params.keys();
-        while(iter.hasNext()){
-            String key = (String)iter.next();
+        while (iter.hasNext()) {
+            String key = (String) iter.next();
             Object value = params.get(key);
 
             if (value instanceof Integer || value instanceof Double) {
-                bundle.putFloat(key, ((Number)value).floatValue());
+                bundle.putFloat(key, ((Number) value).floatValue());
             } else {
                 bundle.putString(key, value.toString());
             }
@@ -324,6 +358,35 @@ public class FirebasePlugin extends CordovaPlugin {
             public void run() {
                 try {
                     mFirebaseAnalytics.logEvent(name, bundle);
+                    callbackContext.success();
+                } catch (Exception e) {
+                    callbackContext.error(e.getMessage());
+                }
+            }
+        });
+    }
+
+    private void logError(final CallbackContext callbackContext, final String message) throws JSONException {
+        cordova.getThreadPool().execute(new Runnable() {
+            public void run() {
+                try {
+                    FirebaseCrash.report(new Exception(message));
+                    callbackContext.success(1);
+                } catch (Exception e) {
+                    FirebaseCrash.log(e.getMessage());
+                    e.printStackTrace();
+                    callbackContext.error(e.getMessage());
+                }
+            }
+        });
+    }
+
+    private void setScreenName(final CallbackContext callbackContext, final String name) {
+        // This must be called on the main thread
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                try {
+                    mFirebaseAnalytics.setCurrentScreen(cordova.getActivity(), name, null);
                     callbackContext.success();
                 } catch (Exception e) {
                     callbackContext.error(e.getMessage());

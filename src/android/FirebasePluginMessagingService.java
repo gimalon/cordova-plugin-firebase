@@ -4,12 +4,12 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
+import android.app.Notification;
 import android.text.TextUtils;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -17,7 +17,6 @@ import com.google.firebase.messaging.RemoteMessage;
 
 import java.util.Map;
 import java.util.Random;
-
 
 public class FirebasePluginMessagingService extends FirebaseMessagingService {
 
@@ -67,8 +66,8 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
         Log.d(TAG, "Notification Message Body/Text: " + text);
 
         // TODO: Add option to developer to configure if show notification when app on foreground
-        if (!TextUtils.isEmpty(text) || !TextUtils.isEmpty(title)) {
-            boolean showNotification = FirebasePlugin.inBackground() || !FirebasePlugin.hasNotificationsCallback();
+        if (!TextUtils.isEmpty(text) || !TextUtils.isEmpty(title) || (!remoteMessage.getData().isEmpty())) {
+            boolean showNotification = (FirebasePlugin.inBackground() || !FirebasePlugin.hasNotificationsCallback()) && (!TextUtils.isEmpty(text) || !TextUtils.isEmpty(title));
             sendNotification(id, title, text, remoteMessage.getData(), showNotification);
         }
     }
@@ -100,15 +99,28 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
                 notificationBuilder.setSmallIcon(getApplicationInfo().icon);
             }
 
-            NotificationManager notificationManager =
-                    (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M)
+            {
+				int accentID = getResources().getIdentifier("accent", "color", getPackageName());
+                notificationBuilder.setColor(getResources().getColor(accentID, null));
+            }
 
-            notificationManager.notify(id.hashCode(), notificationBuilder.build());
+            Notification notification = notificationBuilder.build();
+            if(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP){
+				int iconID = android.R.id.icon;
+				int notiID = getResources().getIdentifier("notification_big", "drawable", getPackageName());
+		if (notification.contentView != null) {
+	                notification.contentView.setImageViewResource(iconID, notiID);
+		}
+            }
+            NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+
+            notificationManager.notify(id.hashCode(), notification);
         } else {
             bundle.putBoolean("tap", false);
+            bundle.putString("title", title);
+            bundle.putString("body", messageBody);
             FirebasePlugin.sendNotification(bundle);
         }
     }
-
-
 }

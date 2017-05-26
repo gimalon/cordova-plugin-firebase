@@ -6,6 +6,7 @@
 - (void)getInstanceId:(CDVInvokedUrlCommand*)command;
 - (void)getToken:(CDVInvokedUrlCommand*)command;
 - (void)grantPermission:(CDVInvokedUrlCommand*)command;
+- (void)hasPermission:(CDVInvokedUrlCommand*)command;
 - (void)setBadgeNumber:(CDVInvokedUrlCommand*)command;
 - (void)getBadgeNumber:(CDVInvokedUrlCommand*)command;
 - (void)subscribe:(CDVInvokedUrlCommand*)command;
@@ -15,15 +16,17 @@
 - (void)sendNotification:(NSDictionary*)userInfo;
 - (void)sendToken:(NSString*)token;
 - (void)logEvent:(CDVInvokedUrlCommand*)command;
+- (void)setScreenName:(CDVInvokedUrlCommand*)command;
 - (void)setUserId:(CDVInvokedUrlCommand*)command;
 - (void)setUserProperty:(CDVInvokedUrlCommand*)command;
+- (void)fetch:(CDVInvokedUrlCommand*)command;
+- (void)activateFetched:(CDVInvokedUrlCommand*)command;
+- (void)getValue:(CDVInvokedUrlCommand*)command;
 
 - (void)applicationDidBecomeActive:(UIApplication *)application;
 - (void)applicationWillResignActive:(UIApplication *)application;
 - (void)didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken;
 - (void)didFailToRegisterForRemoteNotificationsWithError:(NSError *)error;
-
-
 
 @property (nonatomic, copy) NSString *notificationCallbackId;
 @property (nonatomic, copy) NSString *tokenRefreshCallbackId;
